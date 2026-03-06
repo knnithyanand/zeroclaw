@@ -270,7 +270,10 @@ impl CopilotSdkProvider {
     ) -> Result<Value> {
         let deadline = tokio::time::Instant::now() + timeout_duration;
         loop {
-            let remaining = deadline - tokio::time::Instant::now();
+            let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+            if remaining.is_zero() {
+                bail!("JSON-RPC response timed out");
+            }
             let mut buf = String::new();
             let n = tokio::time::timeout(remaining, reader.read_line(&mut buf))
                 .await
@@ -554,7 +557,12 @@ impl CopilotSdkProvider {
         })
     }
 
-    /// Build messages for the Provider trait from a ChatMessage slice.
+    /// Extract the system prompt and last user message from a message slice.
+    ///
+    /// Only the system prompt and the most recent user message are forwarded
+    /// to the Copilot CLI. Intermediate assistant/tool messages are not
+    /// replayed because the CLI manages its own conversation history within
+    /// the persistent session.
     fn extract_system_and_last_user(messages: &[ChatMessage]) -> (Option<&str>, &str) {
         let system = messages
             .iter()
@@ -586,7 +594,12 @@ impl Provider for CopilotSdkProvider {
         model: &str,
         temperature: f64,
     ) -> Result<String> {
-        let _ = temperature; // CLI manages temperature internally.
+        if (temperature - 0.7).abs() > f64::EPSILON {
+            debug!(
+                "copilot-sdk: temperature {temperature} ignored; \
+                 the Copilot CLI manages temperature internally"
+            );
+        }
 
         self.ensure_connected().await?;
         let session_id = self.ensure_session(system_prompt, Some(model)).await?;
@@ -594,6 +607,9 @@ impl Provider for CopilotSdkProvider {
         Ok(result.text)
     }
 
+    /// Multi-turn conversation. Only the system prompt and last user message
+    /// are forwarded to the Copilot CLI session; earlier conversation history
+    /// is managed internally by the CLI.
     async fn chat_with_history(
         &self,
         messages: &[ChatMessage],
@@ -613,7 +629,12 @@ impl Provider for CopilotSdkProvider {
     ) -> Result<ProviderChatResponse> {
         let (system, last_user) = Self::extract_system_and_last_user(request.messages);
 
-        let _ = temperature;
+        if (temperature - 0.7).abs() > f64::EPSILON {
+            debug!(
+                "copilot-sdk: temperature {temperature} ignored; \
+                 the Copilot CLI manages temperature internally"
+            );
+        }
         self.ensure_connected().await?;
         let session_id = self.ensure_session(system, Some(model)).await?;
         let result = self.send_message(&session_id, last_user).await?;
