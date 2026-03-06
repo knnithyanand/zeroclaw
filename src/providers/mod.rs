@@ -21,6 +21,7 @@ pub mod backoff;
 pub mod bedrock;
 pub mod compatible;
 pub mod copilot;
+pub mod copilot_sdk;
 pub mod cursor;
 pub mod gemini;
 pub mod health;
@@ -1465,6 +1466,15 @@ fn create_provider_with_url_and_options(
             AuthStyle::Bearer,
         ))),
         "copilot" | "github-copilot" => Ok(Box::new(copilot::CopilotProvider::new(key))),
+        "copilot-sdk" | "copilot_sdk" | "copilot-cli" | "copilot_cli" => {
+            let cli_url = api_url.map(str::trim).filter(|v| !v.is_empty());
+            Ok(Box::new(copilot_sdk::CopilotSdkProvider::new(
+                None,    // cli_path — uses default or COPILOT_CLI_PATH env
+                cli_url, // cli_url — external server URL if provided
+                key,     // github_token
+                None,    // log_level — uses default "error"
+            )))
+        }
         "cursor" => Ok(Box::new(cursor::CursorProvider::new())),
         "lmstudio" | "lm-studio" => {
             let (base_url, lm_studio_key) = resolve_lmstudio_connection(api_url, key);
@@ -2140,6 +2150,12 @@ pub fn list_providers() -> Vec<ProviderInfo> {
             name: "copilot",
             display_name: "GitHub Copilot",
             aliases: &["github-copilot"],
+            local: false,
+        },
+        ProviderInfo {
+            name: "copilot-sdk",
+            display_name: "GitHub Copilot (SDK/CLI)",
+            aliases: &["copilot_sdk", "copilot-cli", "copilot_cli"],
             local: false,
         },
         ProviderInfo {
@@ -2921,6 +2937,14 @@ mod tests {
     }
 
     #[test]
+    fn factory_copilot_sdk() {
+        assert!(create_provider("copilot-sdk", None).is_ok());
+        assert!(create_provider("copilot_sdk", None).is_ok());
+        assert!(create_provider("copilot-cli", None).is_ok());
+        assert!(create_provider("copilot_cli", None).is_ok());
+    }
+
+    #[test]
     fn factory_cursor() {
         assert!(create_provider("cursor", None).is_ok());
     }
@@ -3347,6 +3371,7 @@ providers = ["demo-plugin-provider"]
             "huggingface",
             "replicate",
             "copilot",
+            "copilot-sdk",
             "cursor",
             "nvidia",
             "astrai",
