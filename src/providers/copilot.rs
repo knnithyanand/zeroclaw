@@ -10,6 +10,10 @@
 //! private; there is no public OAuth scope or app registration for it.
 //! GitHub could change or revoke this at any time, which would break all
 //! third-party integrations simultaneously.
+//!
+//! **Recommended alternative:** Use the `copilot-sdk` provider
+//! ([`super::copilot_sdk`]) which communicates with the official Copilot CLI
+//! via JSON-RPC 2.0, avoiding the fragile VS Code impersonation approach.
 
 use crate::providers::traits::{
     ChatMessage, ChatRequest as ProviderChatRequest, ChatResponse as ProviderChatResponse,

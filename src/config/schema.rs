@@ -399,6 +399,10 @@ pub struct Config {
     /// WASM plugin engine configuration (`[wasm]` section).
     #[serde(default)]
     pub wasm: WasmConfig,
+
+    /// Copilot SDK provider configuration (`[copilot_sdk]` section).
+    #[serde(default)]
+    pub copilot_sdk: CopilotSdkConfig,
 }
 
 /// Named provider profile definition compatible with Codex app-server style config.
@@ -6588,6 +6592,7 @@ impl Default for Config {
             mcp: McpConfig::default(),
             model_support_vision: None,
             wasm: WasmConfig::default(),
+            copilot_sdk: CopilotSdkConfig::default(),
         }
     }
 }
@@ -8117,6 +8122,9 @@ impl Config {
         if let Some(acp) = &self.channels_config.acp {
             acp.validate()?;
         }
+
+        // Copilot SDK
+        self.copilot_sdk.validate()?;
 
         // Gateway
         if self.gateway.host.trim().is_empty() {
@@ -9779,6 +9787,48 @@ fn sync_directory(path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Copilot SDK provider configuration (`[copilot_sdk]` section).
+///
+/// Controls how ZeroClaw connects to the GitHub Copilot CLI in headless mode
+/// for JSON-RPC 2.0 communication. Mutually exclusive options: set `cli_path`
+/// (spawn a local process) **or** `cli_url` (connect to an external server).
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+pub struct CopilotSdkConfig {
+    /// Path to the `copilot` binary (default: `"copilot"`).
+    /// Ignored when `cli_url` is set.
+    #[serde(default)]
+    pub cli_path: Option<String>,
+    /// URL of an external Copilot CLI server (e.g. `"tcp://127.0.0.1:4321"`).
+    /// When set, the provider connects via TCP instead of spawning a child process.
+    #[serde(default)]
+    pub cli_url: Option<String>,
+    /// CLI log level (default: `"error"`). Accepted values: `"error"`, `"warn"`, `"info"`, `"debug"`.
+    #[serde(default)]
+    pub log_level: Option<String>,
+}
+
+impl CopilotSdkConfig {
+    fn validate(&self) -> Result<()> {
+        if self.cli_path.is_some() && self.cli_url.is_some() {
+            anyhow::bail!(
+                "copilot_sdk.cli_path and copilot_sdk.cli_url are mutually exclusive; \
+                 set one or the other"
+            );
+        }
+        if self
+            .cli_path
+            .as_deref()
+            .is_some_and(|p| p.trim().is_empty())
+        {
+            anyhow::bail!("copilot_sdk.cli_path must not be empty when set");
+        }
+        if self.cli_url.as_deref().is_some_and(|u| u.trim().is_empty()) {
+            anyhow::bail!("copilot_sdk.cli_url must not be empty when set");
+        }
+        Ok(())
+    }
+}
+
 /// ACP (Agent Client Protocol) channel configuration.
 ///
 /// Enables ZeroClaw to act as an ACP client, connecting to an OpenCode ACP server
@@ -10510,6 +10560,7 @@ ws_url = "ws://127.0.0.1:3002"
             mcp: McpConfig::default(),
             model_support_vision: None,
             wasm: WasmConfig::default(),
+            copilot_sdk: CopilotSdkConfig::default(),
         };
 
         let toml_str = toml::to_string_pretty(&config).unwrap();
@@ -10898,6 +10949,7 @@ denied_tools = ["shell"]
             mcp: McpConfig::default(),
             model_support_vision: None,
             wasm: WasmConfig::default(),
+            copilot_sdk: CopilotSdkConfig::default(),
         };
 
         config.save().await.unwrap();
@@ -15610,5 +15662,67 @@ reserve_percent = 15
         config
             .validate()
             .expect("matching route_down hint route should validate");
+    }
+
+    // ── CopilotSdkConfig ────────────────────────────────────
+
+    #[test]
+    async fn copilot_sdk_config_default_validates() {
+        let cfg = CopilotSdkConfig::default();
+        cfg.validate().expect("default config should validate");
+    }
+
+    #[test]
+    async fn copilot_sdk_config_rejects_both_path_and_url() {
+        let cfg = CopilotSdkConfig {
+            cli_path: Some("/usr/bin/copilot".to_string()),
+            cli_url: Some("tcp://127.0.0.1:4321".to_string()),
+            log_level: None,
+        };
+        let err = cfg.validate().unwrap_err();
+        assert!(
+            err.to_string().contains("mutually exclusive"),
+            "expected mutually exclusive error, got: {err}"
+        );
+    }
+
+    #[test]
+    async fn copilot_sdk_config_rejects_empty_path() {
+        let cfg = CopilotSdkConfig {
+            cli_path: Some("  ".to_string()),
+            cli_url: None,
+            log_level: None,
+        };
+        assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    async fn copilot_sdk_config_rejects_empty_url() {
+        let cfg = CopilotSdkConfig {
+            cli_path: None,
+            cli_url: Some("".to_string()),
+            log_level: None,
+        };
+        assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    async fn copilot_sdk_config_accepts_path_only() {
+        let cfg = CopilotSdkConfig {
+            cli_path: Some("/usr/local/bin/copilot".to_string()),
+            cli_url: None,
+            log_level: Some("debug".to_string()),
+        };
+        cfg.validate().expect("path-only config should validate");
+    }
+
+    #[test]
+    async fn copilot_sdk_config_accepts_url_only() {
+        let cfg = CopilotSdkConfig {
+            cli_path: None,
+            cli_url: Some("tcp://127.0.0.1:4321".to_string()),
+            log_level: None,
+        };
+        cfg.validate().expect("url-only config should validate");
     }
 }

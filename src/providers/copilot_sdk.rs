@@ -134,7 +134,9 @@ impl CopilotSdkProvider {
     /// Create a new `CopilotSdkProvider`.
     ///
     /// - `cli_path`: path to the `copilot` binary (default: `"copilot"`).
+    ///   Falls back to `COPILOT_CLI_PATH` env var.
     /// - `cli_url`: URL of an external Copilot CLI server (e.g. `"tcp://127.0.0.1:4321"`).
+    ///   Falls back to `COPILOT_CLI_URL` env var.
     /// - `github_token`: optional GitHub token for authentication.
     /// - `log_level`: CLI log level (default: `"error"`).
     pub fn new(
@@ -143,12 +145,28 @@ impl CopilotSdkProvider {
         github_token: Option<&str>,
         log_level: Option<&str>,
     ) -> Self {
+        let resolved_cli_path = cli_path
+            .filter(|s| !s.is_empty())
+            .map(ToString::to_string)
+            .or_else(|| {
+                std::env::var("COPILOT_CLI_PATH")
+                    .ok()
+                    .filter(|s| !s.is_empty())
+            })
+            .unwrap_or_else(|| DEFAULT_CLI_PATH.to_string());
+
+        let resolved_cli_url = cli_url
+            .filter(|s| !s.is_empty())
+            .map(ToString::to_string)
+            .or_else(|| {
+                std::env::var("COPILOT_CLI_URL")
+                    .ok()
+                    .filter(|s| !s.is_empty())
+            });
+
         Self {
-            cli_path: cli_path
-                .filter(|s| !s.is_empty())
-                .unwrap_or(DEFAULT_CLI_PATH)
-                .to_string(),
-            cli_url: cli_url.filter(|s| !s.is_empty()).map(ToString::to_string),
+            cli_path: resolved_cli_path,
+            cli_url: resolved_cli_url,
             github_token: github_token
                 .filter(|s| !s.is_empty())
                 .map(ToString::to_string),
@@ -161,6 +179,20 @@ impl CopilotSdkProvider {
             session_id: Arc::new(Mutex::new(None)),
             next_id: AtomicU64::new(1),
         }
+    }
+
+    /// Create a `CopilotSdkProvider` from a [`CopilotSdkConfig`] and optional
+    /// GitHub token.
+    pub fn from_config(
+        config: &crate::config::schema::CopilotSdkConfig,
+        github_token: Option<&str>,
+    ) -> Self {
+        Self::new(
+            config.cli_path.as_deref(),
+            config.cli_url.as_deref(),
+            github_token,
+            config.log_level.as_deref(),
+        )
     }
 
     /// Allocate the next JSON-RPC request ID.

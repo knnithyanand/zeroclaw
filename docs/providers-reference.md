@@ -58,6 +58,7 @@ credential is not reused for fallback providers.
 | `perplexity` | — | No | `PERPLEXITY_API_KEY` |
 | `cohere` | — | No | `COHERE_API_KEY` |
 | `copilot` | `github-copilot` | No | (use config/`API_KEY` fallback with GitHub token) |
+| `copilot-sdk` | `copilot_sdk`, `copilot-cli`, `copilot_cli` | No | (optional GitHub token via `GITHUB_TOKEN` or config `api_key`) |
 | `cursor` | — | Yes | (none; Cursor manages its own credentials) |
 | `lmstudio` | `lm-studio` | Yes | (optional; local by default) |
 | `llamacpp` | `llama.cpp` | Yes | `LLAMACPP_API_KEY` (optional; only if server auth is enabled) |
@@ -65,6 +66,39 @@ credential is not reused for fallback providers.
 | `vllm` | — | Yes | `VLLM_API_KEY` (optional) |
 | `osaurus` | — | Yes | `OSAURUS_API_KEY` (optional; defaults to `"osaurus"`) |
 | `nvidia` | `nvidia-nim`, `build.nvidia.com` | No | `NVIDIA_API_KEY` |
+
+### Copilot SDK (CLI) Notes
+
+- Provider ID: `copilot-sdk` (aliases: `copilot_sdk`, `copilot-cli`, `copilot_cli`)
+- Communicates with the official [GitHub Copilot CLI](https://docs.github.com/en/copilot) via JSON-RPC 2.0 over stdio or TCP.
+- **Recommended over the `copilot` provider** — uses the official Copilot SDK protocol instead of impersonating VS Code.
+- The `copilot` binary must be installed and in `PATH`, or specify the path via `COPILOT_CLI_PATH` env var or `[copilot_sdk]` config section.
+- Authentication is managed by the Copilot CLI itself. Optionally pass a GitHub token via `api_key` or `GITHUB_TOKEN`.
+- Supports native tool calling (the CLI has built-in tools).
+
+**Config example (stdio mode — default):**
+
+```toml
+default_provider = "copilot-sdk"
+
+[copilot_sdk]
+# cli_path = "/usr/local/bin/copilot"  # optional, defaults to "copilot"
+# log_level = "error"                   # optional: error, warn, info, debug
+```
+
+**Config example (TCP mode — connect to external server):**
+
+```toml
+default_provider = "copilot-sdk"
+
+[copilot_sdk]
+cli_url = "tcp://127.0.0.1:4321"
+```
+
+**Environment variables:**
+- `COPILOT_CLI_PATH` — path to the `copilot` binary (overrides config `cli_path`)
+- `COPILOT_CLI_URL` — URL of an external CLI server (overrides config `cli_url`)
+- `GITHUB_TOKEN` — GitHub token for CLI authentication
 
 ### Cursor (Headless CLI) Notes
 

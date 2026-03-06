@@ -670,6 +670,24 @@ Notes:
   4. legacy `ZEROCLAW_RESPONSES_WEBSOCKET` (boolean)
 - Environment overrides replace configured `provider.transport` when set.
 
+## `[copilot_sdk]`
+
+| Key | Default | Purpose |
+|---|---|---|
+| `cli_path` | unset (`"copilot"` at runtime) | Path to the `copilot` CLI binary |
+| `cli_url` | unset | URL of an external Copilot CLI server (e.g. `"tcp://127.0.0.1:4321"`) |
+| `log_level` | unset (`"error"` at runtime) | CLI log level: `error`, `warn`, `info`, `debug` |
+
+Notes:
+
+- `cli_path` and `cli_url` are mutually exclusive. Set `cli_path` for stdio mode (default) or `cli_url` for TCP mode.
+- When neither is set, the provider looks for `copilot` in `PATH`.
+- Environment overrides:
+  - `COPILOT_CLI_PATH` overrides `cli_path` when non-empty.
+  - `COPILOT_CLI_URL` overrides `cli_url` when non-empty.
+- Authentication: the Copilot CLI manages its own auth. Optionally pass a GitHub token via `api_key` or `GITHUB_TOKEN` env var.
+- See [Providers Reference](providers-reference.md) for full setup instructions.
+
 ## `[skills]`
 
 | Key | Default | Purpose |
